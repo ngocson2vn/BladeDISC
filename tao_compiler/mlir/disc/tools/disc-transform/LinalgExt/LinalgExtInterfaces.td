@@ -12,7 +12,7 @@
 #ifndef DISC_DIALECT_LINALGEXT_INTERFACES
 #define DISC_DIALECT_LINALGEXT_INTERFACES
 
-include "external/org_tensorflow/tensorflow/compiler/mlir/disc/tools/disc-transform/LinalgExt/LinalgExtBase.td"
+include "mlir/disc/tools/disc-transform/LinalgExt/LinalgExtBase.td"
 
 // Mainly copied from IREE project.
 

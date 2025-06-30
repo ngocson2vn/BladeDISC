@@ -1,5 +1,46 @@
 workspace(name = "org_disc_compiler")
 
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("//bazel/torch_mlir:repo.bzl", "blade_http_archive")
+
+http_archive(
+    name = "com_github_bazelbuild_buildtools",
+    sha256 = "ae34c344514e08c23e90da0e2d6cb700fcd28e80c02e23e4d5715dddcb42f7b3",
+    strip_prefix = "buildtools-4.2.2",
+    urls = [
+        "https://github.com/bazelbuild/buildtools/archive/refs/tags/4.2.2.tar.gz",
+    ],
+)
+
+blade_http_archive(
+  name = "mlir-hlo",
+  sha256 = "ba30ee3f189c9f993cb2de823fdb6ddb41dd2c9145f0b53a958ad4b56e6cb3ee",
+  strip_prefix = "mlir-hlo-ac26bdba7a5edfe6060ba5be528b9d20c987297d",
+  urls = [
+    "https://github.com/tensorflow/mlir-hlo/archive/ac26bdba7a5edfe6060ba5be528b9d20c987297d.zip",
+  ],
+  patch_file = [
+    "//bazel/torch_mlir:disable-simplify-dynamic-gather-to-gather.patch",
+    "//bazel/torch_mlir:absl-build-path.patch",
+  ]
+)
+
+new_local_repository(
+    name = "sony-torch-mlir",
+    build_file = "./bazel/torch_mlir/BUILD",
+    path = "third_party/torch-mlir"
+)
+
+load("@sony-torch-mlir//utils/bazel:configure.bzl", "torch_mlir_configure")
+
+torch_mlir_configure(
+  name = "torch-mlir"
+)
+
+load("//bazel/torch:repo.bzl", "torch_configure", "torch_pybind11_configure")
+
+torch_configure(name = "local_org_torch")
+
 local_repository(
     name = "org_tensorflow",
     path = "../tf_community",

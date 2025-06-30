@@ -79,6 +79,12 @@ limitations under the License.
 #include "tensorflow/compiler/mlir/tf2xla/transforms/passes.h"
 #include "tensorflow/core/util/env_var.h"
 
+#include "stablehlo/dialect/ChloOps.h"
+#include "torch-mlir/Conversion/MhloPasses.h"
+#include "torch-mlir/Conversion/TorchToStablehlo/TorchToStablehlo.h"
+#include "torch-mlir/Dialect/Torch/Transforms/Passes.h"
+#include "torch-mlir/InitAll.h"
+
 namespace mlir {
 namespace disc_ral {
 
@@ -1156,3 +1162,147 @@ Status ConvertTF2MlirHlo(mlir::ModuleOp module_op) {
 }
 
 }  // namespace tensorflow
+
+namespace torch {
+namespace env {
+
+std::string AsciiStrToLower(const char* cstr) {
+  if (cstr == nullptr) {
+    return "";
+  } else {
+    std::string str(cstr);
+    std::for_each(str.begin(), str.end(), [](char& c) { c = ::tolower(c); });
+    return str;
+  }
+}
+
+bool ReadBoolFromEnvVar(const char* env_var_name, bool default_val) {
+  const char* env_var_val = std::getenv(env_var_name);
+  if (env_var_val == nullptr) {
+    return default_val;
+  }
+
+  std::string str_value = AsciiStrToLower(env_var_val);
+  if (str_value == "0" || str_value == "false" || str_value == "off") {
+    return false;
+  } else if (str_value == "1" || str_value == "true" || str_value == "on") {
+    return true;
+  }
+  LOG(ERROR) << "Failed to parse the env-var ${" << env_var_name
+             << "} into bool: " << env_var_val
+             << ". Use the default value: " << default_val;
+  return default_val;
+}
+
+}  // namespace env
+
+void RegisterDialects(mlir::DialectRegistry& registry) {
+  registry.insert<mlir::func::FuncDialect>();
+  registry.insert<mlir::tensor::TensorDialect>();
+  registry.insert<mlir::mhlo::MhloDialect>();
+  registry.insert<mlir::mhlo_disc::MhloDiscDialect>();
+  registry.insert<mlir::chlo::ChloDialect>();
+}
+
+
+std::vector<std::string> GetDeviceStrs(llvm::ArrayRef<mlir::Type> types) {
+  std::vector<std::string> dev_strs;
+  dev_strs.reserve(types.size());
+  for (auto& type : types) {
+    // default to device cpu
+    dev_strs.push_back("cpu");
+  }
+
+  return dev_strs;
+}
+
+std::vector<std::string> GetDebugNames(llvm::ArrayRef<mlir::Type> types, std::string prefix="arg") {
+  std::vector<std::string> debug_names;
+  debug_names.reserve(types.size());
+  for (unsigned i = 0; i < types.size(); i++) {
+    debug_names.push_back(prefix + std::to_string(i));
+  }
+  return debug_names;
+}
+
+std::string GetAttrString(const ::llvm::ArrayRef<std::string>& str_vec) {
+  std::string s;
+  ::llvm::raw_string_ostream ss(s);
+  ::llvm::interleave(str_vec, ss, ",");
+  return ss.str();
+}
+
+mlir::NamedAttribute BuildFunctionAttrs(mlir::Builder& builder, const mlir::FunctionType& funcType) {
+  auto input_devices = GetDeviceStrs(funcType.getInputs());
+  auto output_devices = GetDeviceStrs(funcType.getResults());
+  auto input_names = GetDebugNames(funcType.getInputs());
+  auto output_names = GetDebugNames(funcType.getResults(), "out");
+
+  auto inputs_attr = builder.getNamedAttr(
+      "inputs", builder.getStringAttr(GetAttrString(input_names)));
+  auto outputs_attr = builder.getNamedAttr(
+      "outputs", builder.getStringAttr(GetAttrString(output_names)));
+  auto input_dev_str = GetAttrString(input_devices);
+  auto input_placements_attr = builder.getNamedAttr(
+      "input_placements", builder.getStringAttr(input_dev_str));
+  auto output_dev_str = GetAttrString(output_devices);
+  auto output_placements_attr = builder.getNamedAttr(
+      "output_placements", builder.getStringAttr(output_dev_str));
+
+  return builder.getNamedAttr(
+      "tf.entry_function", builder.getDictionaryAttr({inputs_attr, outputs_attr,
+                                                      input_placements_attr,
+                                                      output_placements_attr}));
+}
+
+torch::Status ConvertTorchToMhlo(mlir::ModuleOp moduleOp) {
+  // mlir::DialectRegistry registry;
+  // RegisterDialects(registry);
+  // ::mlir::torch::registerAllDialects(registry);
+  // ::mlir::MLIRContext mlir_context(registry);
+  // mlir_context.loadAllAvailableDialects();
+
+  auto mlir_context = moduleOp.getContext();
+  auto builder = ::mlir::OpBuilder(mlir_context);
+
+  moduleOp.walk([&](mlir::func::FuncOp funcOp) {
+    auto funcType = funcOp.getFunctionType();
+    auto entry_attr = BuildFunctionAttrs(builder, funcType);
+    funcOp->setAttrs({entry_attr});
+  });
+
+  mlir::OpPrintingFlags print_flags;
+  print_flags.elideLargeElementsAttrs();
+  print_flags.enableDebugInfo();
+
+  bool enable_printing =
+      env::ReadBoolFromEnvVar("TORCH_BLADE_MHLO_DEBUG_LOG", false);
+  if (enable_printing) {
+    mlir_context->disableMultithreading();
+    mlir_context->printOpOnDiagnostic(true);
+  }
+
+  ::mlir::torch::Torch::TorchLoweringPipelineOptions options;
+  ::mlir::PassManager pm(mlir_context);
+  if (enable_printing) {
+    pm.enableIRPrinting(
+        /*shouldPrintBeforePass*/ [](mlir::Pass*,
+                                    mlir::Operation*) { return true; },
+        /*shouldPrintAfterPasss*/
+        [](mlir::Pass*, mlir::Operation*) { return true; },
+        /*printModuleScope*/ false,
+        /*printAfterOnlyOnChange*/ true,
+        /*printAfterOnlyOnFailure*/ false,
+        /*out*/ ::llvm::errs(),
+        /*opPrintingFlags*/ print_flags);
+  }
+  ::mlir::torch::createDiscTorchBackendToMhloBackendPipeline(pm, options);
+  if (mlir::failed(pm.run(moduleOp))) {
+    moduleOp.emitError() << "TorchBackendToMhloBackendPipeline failed";
+    return torch::Status("TorchBackendToMhloBackendPipeline failed");
+  }
+
+  return torch::Status();
+}
+
+}  // namespace torch

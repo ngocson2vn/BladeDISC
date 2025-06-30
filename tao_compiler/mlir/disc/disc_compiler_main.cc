@@ -60,6 +60,8 @@ limitations under the License.
 #include "tensorflow/core/platform/env.h"
 #include "tensorflow/core/platform/logging.h"
 
+#include "torch-mlir/Dialect/Torch/IR/TorchDialect.h"
+
 #ifndef TAO_CPU_ONLY
 #if TENSORFLOW_USE_ROCM
 #define GPU_SUCCESS hipSuccess
@@ -186,6 +188,7 @@ int RealMain() {
   registry.insert<mlir::lmhlo_gpu::LmhloGpuDialect>();
   registry.insert<mlir::disc_ral::RalDialect>();
   registry.insert<mlir::TF::TensorFlowDialect>();
+  registry.insert<mlir::torch::Torch::TorchDialect>();
 
   MLIRContext context(registry);
   std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
@@ -209,6 +212,23 @@ int RealMain() {
                       1e6
                << " s.\n";
 
+  llvm::dbgs() << "[[ INFO ]] Running ConvertTorchToMhlo\n";
+  auto status = ::torch::ConvertTorchToMhlo(module);
+  if (!status.ok()) {
+    llvm::dbgs() << "ConvertTorchToMhlo failed: " << status.ToString() << "\n";
+    return 1;
+  }
+
+  if (VLOG_IS_ON(0)) {
+    llvm::dbgs() << "======== After Torch2MHLO =========\n";
+    module.dump();
+    llvm::dbgs() << "\n==================================\n";
+  }
+  std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+  llvm::errs() << "[zj] Torch2MHLO takes: "
+               << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count() / 1e6
+               << " s.\n";
+
   llvm::dbgs() << "[[ INFO ]] Running TF2XLA\n";
   auto s = tensorflow::ConvertTF2MlirHlo(module);
   if (!s.ok()) {
@@ -221,9 +241,9 @@ int RealMain() {
     module.dump();
     llvm::dbgs() << "\n======= END After TF2HLO ==========\n";
   }
-  std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
   llvm::errs() << "[DISC] tf2hlo takes: "
-               << std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1)
+               << std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2)
                           .count() /
                       1e6
                << " s.\n";
@@ -244,9 +264,9 @@ int RealMain() {
     llvm::errs() << "could not convert hlo to shared lib file\n";
     return 1;
   }
-  std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
+  std::chrono::steady_clock::time_point t4 = std::chrono::steady_clock::now();
   llvm::errs() << "[DISC] LowerHLOToSharedLibrary takes: "
-               << std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2)
+               << std::chrono::duration_cast<std::chrono::microseconds>(t4 - t3)
                           .count() /
                       1e6
                << " s.\n";

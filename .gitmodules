@@ -16,3 +16,6 @@
 [submodule "tao_compiler/mlir/disc/cutlass"]
 	path = tao_compiler/mlir/disc/cutlass
 	url = https://github.com/NVIDIA/cutlass.git
+[submodule "tao_compiler/third_party/torch-mlir"]
+	path = tao_compiler/third_party/torch-mlir
+	url = https://github.com/pai-disc/torch-mlir.git

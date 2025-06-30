@@ -214,6 +214,7 @@ disc_cc_library(
     deps = [
         ":all_passes",
         ":disc_ral",
+        "//pytorch_blade/torch-mlir:DiscTorchMLIRTorchToMhlo",
         "@org_tensorflow//tensorflow/compiler/xla/mlir_hlo:all_passes",
         "@org_tensorflow//tensorflow/compiler/xla/mlir_hlo:mlir_hlo",
         "@org_tensorflow//tensorflow/compiler/xla/mlir_hlo:lhlo",
@@ -226,6 +227,10 @@ disc_cc_library(
         "@llvm-project//mlir:BuiltinToLLVMIRTranslation",
         "@llvm-project//mlir:ExecutionEngineUtils",
         "@llvm-project//mlir:IR",
+        "@mlir-hlo//:mlir_hlo",
+        "@mlir-hlo//:mhlo_passes",
+        "@mlir-hlo//:lmhlo_passes",
+        "@mlir-hlo//:lhlo_gpu",
     ],
     alwayslink = 1,
 )

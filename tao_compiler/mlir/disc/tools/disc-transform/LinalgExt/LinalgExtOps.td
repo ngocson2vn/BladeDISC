@@ -12,9 +12,9 @@
 #ifndef DISC_LINALGEXT_OPS
 #define DISC_LINALGEXT_OPS
 
-include "external/org_tensorflow/tensorflow/compiler/mlir/disc/tools/disc-transform/LinalgExt/LinalgExtBase.td"
-include "external/org_tensorflow/tensorflow/compiler/mlir/disc/tools/disc-transform/LinalgExt/LinalgExtEnums.td"
-include "external/org_tensorflow/tensorflow/compiler/mlir/disc/tools/disc-transform/LinalgExt/LinalgExtInterfaces.td"
+include "mlir/disc/tools/disc-transform/LinalgExt/LinalgExtBase.td"
+include "mlir/disc/tools/disc-transform/LinalgExt/LinalgExtEnums.td"
+include "mlir/disc/tools/disc-transform/LinalgExt/LinalgExtInterfaces.td"
 
 include "mlir/Dialect/Utils/StructuredOpsUtils.td"
 include "mlir/Dialect/Linalg/IR/LinalgBase.td"

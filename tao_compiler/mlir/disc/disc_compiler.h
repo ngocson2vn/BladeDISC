@@ -109,4 +109,30 @@ Status ConvertTF2MlirHlo(mlir::ModuleOp module_op);
 
 }  // namespace tensorflow
 
+namespace torch {
+
+struct Status {
+  Status() = default;
+
+  Status(const std::string& error_message) {
+    if (!error_message.empty()) {
+      _error_message = error_message;
+    }
+  }
+
+  bool ok() {
+    return _error_message.empty();
+  }
+
+  const std::string& ToString() {
+    return _error_message;
+  }
+
+  std::string _error_message = "";
+};
+
+torch::Status ConvertTorchToMhlo(mlir::ModuleOp mlir_module);
+
+}  // namespace torch
+
 #endif  // DISC_DISC_COMPILER_H_

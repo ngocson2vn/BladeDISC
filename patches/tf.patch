@@ -1,0 +1,12 @@
+diff --git a/tensorflow/BUILD b/tensorflow/BUILD
+index d776f57ba3b..efac2621d50 100644
+--- a/tensorflow/BUILD
++++ b/tensorflow/BUILD
+@@ -1220,6 +1220,7 @@ cc_import(
+         "//tensorflow:macos": ":libtensorflow_framework.dylib",
+         "//conditions:default": ":libtensorflow_framework.so.%s" % VERSION_MAJOR,
+     }),
++    visibility = ["//visibility:public"],
+ )
+ 
+ # -------------------------------------------
